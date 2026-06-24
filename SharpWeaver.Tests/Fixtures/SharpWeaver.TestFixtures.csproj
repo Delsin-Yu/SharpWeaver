@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+
+
+    <PropertyGroup>
+
+        <TargetFramework>net10.0</TargetFramework>
+
+        <Nullable>enable</Nullable>
+
+        <LangVersion>latest</LangVersion>
+
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+        <DebugType>portable</DebugType>
+
+    </PropertyGroup>
+
+
+
+    <ItemGroup>
+
+        <PackageReference Include="GDTask" Version="3.0.0" />
+
+        <PackageReference Include="GodotSharp" Version="4.6.1" />
+
+    </ItemGroup>
+
+
+
+    <ItemGroup>
+
+        <ProjectReference Include="..\..\SharpWeaver.Attributes\SharpWeaver.Attributes.csproj" />
+
+    </ItemGroup>
+
+
+
+</Project>
+

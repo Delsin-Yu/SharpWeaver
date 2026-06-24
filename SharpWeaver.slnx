@@ -1,0 +1,22 @@
+<Solution>
+
+    <Project Path="SharpWeaver/SharpWeaver.csproj"/>
+
+    <Project Path="SharpWeaver.Attributes/SharpWeaver.Attributes.csproj"/>
+
+    <Project Path="SharpWeaver.Build/SharpWeaver.Build.csproj"/>
+
+    <Project Path="SharpWeaver.Tests/Unit/SharpWeaver.Tests.csproj"/>
+
+    <Project Path="SharpWeaver.Tests/Fixtures/SharpWeaver.TestFixtures.csproj"/>
+
+    <Project Path="SharpWeaver.Tests/BadSignature/SharpWeaver.TestFixtures.BadSignature.csproj"/>
+
+    <Project Path="SharpWeaver.Tests/DuplicatePrefix/SharpWeaver.TestFixtures.DuplicatePrefix.csproj"/>
+
+    <Project Path="SharpWeaver.Tests/InstancePatch/SharpWeaver.TestFixtures.InstancePatch.csproj"/>
+
+    <Project Path="SharpWeaver.Examples/SharpWeaver.Examples.csproj"/>
+
+</Solution>
+

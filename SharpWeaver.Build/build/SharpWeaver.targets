@@ -1,0 +1,90 @@
+<!--
+  SharpWeaver MSBuild integration.
+
+  Runs the Cecil weaver after CoreCompile on the intermediate assembly when
+  SharpWeaverEnabled is true (Debug by default, Release off).
+
+  Incremental: Outputs a sidecar stamp (not the assembly itself). Using the
+  woven DLL as both Inputs and Outputs breaks MSBuild — after CoreCompile the
+  fresh DLL is newer than sources, so SharpWeave is skipped and an unwoven
+  assembly can be copied to bin.
+
+  Force a weave on every build: -p:SharpWeaverForceRun=true
+  Weave only this target:     dotnet build ... -t:SharpWeave
+-->
+<Project>
+
+  <PropertyGroup>
+    <SharpWeaverEnabled Condition="'$(SharpWeaverEnabled)' == '' and '$(Configuration)' == 'Debug'">true</SharpWeaverEnabled>
+    <SharpWeaverEnabled Condition="'$(SharpWeaverEnabled)' == ''">false</SharpWeaverEnabled>
+    <_SharpWeaverProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\SharpWeaver\SharpWeaver.csproj'))</_SharpWeaverProjectPath>
+    <_SharpWeaverToolFallback>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\SharpWeaver\bin\$(Configuration)\net10.0\SharpWeaver.dll'))</_SharpWeaverToolFallback>
+    <_SharpWeaverTargetsSelf>$(MSBuildThisFileFullPath)</_SharpWeaverTargetsSelf>
+    <_SharpWeaverStamp>$(IntermediateOutputPath)$(TargetName).sharpweaver.stamp</_SharpWeaverStamp>
+    <_SharpWeaverBuildState>$(IntermediateOutputPath)$(TargetName).sharpweaver.inputs</_SharpWeaverBuildState>
+  </PropertyGroup>
+
+  <Target Name="BuildSharpWeaverTool"
+          Condition="'$(SharpWeaverEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="$(_SharpWeaverProjectPath)"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);Platform=$(Platform)" />
+  </Target>
+
+  <Target Name="RunSharpWeaver">
+
+    <PropertyGroup>
+      <SharpWeaverAssembly>@(IntermediateAssembly->'%(FullPath)')</SharpWeaverAssembly>
+      <SharpWeaverAssembly Condition="'$(SharpWeaverAssembly)' == ''">$(IntermediateOutputPath)$(TargetFileName)</SharpWeaverAssembly>
+      <_SharpWeaverToolResolved Condition="'$(SharpWeaverToolPath)' != ''">$(SharpWeaverToolPath)</_SharpWeaverToolResolved>
+      <_SharpWeaverToolResolved Condition="'$(_SharpWeaverToolResolved)' == ''">$(_SharpWeaverToolFallback)</_SharpWeaverToolResolved>
+      <_SharpWeaverReferences>@(ReferencePath->'%(FullPath)', ';')</_SharpWeaverReferences>
+    </PropertyGroup>
+
+    <Error Condition="!Exists('$(_SharpWeaverToolResolved)')"
+           Text="SharpWeaver tool not found at '$(_SharpWeaverToolResolved)'. Build SharpWeaver/SharpWeaver.csproj." />
+
+    <Message Importance="high" Text="SharpWeaver: weaving $(TargetFileName)..." />
+
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
+          Command="dotnet exec &quot;$(_SharpWeaverToolResolved)&quot; --assembly &quot;$(SharpWeaverAssembly)&quot; --references &quot;$(_SharpWeaverReferences)&quot;" />
+
+    <Touch Files="$(_SharpWeaverStamp)" AlwaysCreate="true" />
+  </Target>
+
+  <Target Name="PrepareSharpWeaverIncrementalInputs"
+          Condition="'$(SharpWeaverEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_SharpWeaverBuildStateLine Include="Configuration=$(Configuration)" />
+      <_SharpWeaverBuildStateLine Include="Platform=$(Platform)" />
+      <_SharpWeaverBuildStateLine Include="TargetFramework=$(TargetFramework)" />
+      <_SharpWeaverBuildStateLine Include="DefineConstants=$(DefineConstants)" />
+      <_SharpWeaverBuildStateLine Include="SharpWeaverEnabled=$(SharpWeaverEnabled)" />
+      <_SharpWeaverBuildStateLine Include="SharpWeaverToolPath=$(SharpWeaverToolPath)" />
+      <_SharpWeaverBuildStateLine Include="MSBuildProjectFullPath=$(MSBuildProjectFullPath)" />
+    </ItemGroup>
+
+    <WriteLinesToFile
+      File="$(_SharpWeaverBuildState)"
+      Lines="@(_SharpWeaverBuildStateLine)"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true" />
+  </Target>
+
+  <Target Name="SharpWeave"
+          AfterTargets="CoreCompile"
+          DependsOnTargets="BuildSharpWeaverTool;PrepareSharpWeaverIncrementalInputs"
+          Condition="'$(SharpWeaverEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(SharpWeaverForceRun)' != 'true'"
+          Inputs="@(IntermediateAssembly);@(Compile);$(MSBuildProjectFullPath);$(_SharpWeaverBuildState);$(_SharpWeaverToolFallback);$(_SharpWeaverTargetsSelf)"
+          Outputs="$(_SharpWeaverStamp)">
+    <CallTarget Targets="RunSharpWeaver" />
+  </Target>
+
+  <Target Name="SharpWeaveForceRun"
+          AfterTargets="CoreCompile"
+          DependsOnTargets="BuildSharpWeaverTool;PrepareSharpWeaverIncrementalInputs"
+          Condition="'$(SharpWeaverEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(SharpWeaverForceRun)' == 'true'">
+    <CallTarget Targets="RunSharpWeaver" />
+  </Target>
+
+</Project>
