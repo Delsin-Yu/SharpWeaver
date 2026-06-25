@@ -34,6 +34,7 @@ public static class WeaveScanner
 
                 var hasSync = false;
                 var hasAsync = false;
+                var hasCallSite = false;
 
                 foreach (var attribute in method.CustomAttributes)
                 {
@@ -47,16 +48,21 @@ public static class WeaveScanner
                     {
                         hasAsync = true;
                     }
+                    else if (SharpWeaverMetadata.IsWeaveCallSiteAttribute(attrName, shortName))
+                    {
+                        hasCallSite = true;
+                    }
                 }
 
-                if (hasSync && hasAsync)
+                var weaveKindCount = (hasSync ? 1 : 0) + (hasAsync ? 1 : 0) + (hasCallSite ? 1 : 0);
+                if (weaveKindCount > 1)
                 {
                     foundErrors.Add(
-                        $"编织方法 '{type.FullName}.{method.Name}' 不得同时标注 [Weave] 与 [AsyncWeave]。");
+                        $"编织方法 '{type.FullName}.{method.Name}' 不得同时标注 [Weave]、[AsyncWeave] 与 [WeaveCallSite]。");
                     continue;
                 }
 
-                if (!hasSync && !hasAsync)
+                if (weaveKindCount == 0)
                 {
                     continue;
                 }
@@ -77,8 +83,9 @@ public static class WeaveScanner
                     var shortName = attribute.AttributeType.Name;
                     var isSyncAttr = SharpWeaverMetadata.IsWeaveAttribute(attrName, shortName);
                     var isAsyncAttr = SharpWeaverMetadata.IsAsyncWeaveAttribute(attrName, shortName);
+                    var isCallSiteAttr = SharpWeaverMetadata.IsWeaveCallSiteAttribute(attrName, shortName);
 
-                    if (!isSyncAttr && !isAsyncAttr)
+                    if (!isSyncAttr && !isAsyncAttr && !isCallSiteAttr)
                     {
                         continue;
                     }
@@ -86,7 +93,11 @@ public static class WeaveScanner
                     var sig = ReadTargetSignature(attribute);
                     if (sig == null)
                     {
-                        var attrLabel = isAsyncAttr ? "[AsyncWeave]" : "[Weave]";
+                        var attrLabel = isAsyncAttr
+                            ? "[AsyncWeave]"
+                            : isCallSiteAttr
+                                ? "[WeaveCallSite]"
+                                : "[Weave]";
                         foundErrors.Add(
                             $"编织方法 '{type.FullName}.{method.Name}' 的 {attrLabel} 特性缺少 TargetSignature 参数。");
                         continue;
@@ -116,7 +127,11 @@ public static class WeaveScanner
                         type.FullName,
                         discoveryOrder++,
                         excludePatterns,
-                        isAsyncAttr,
+                        isAsyncAttr
+                            ? WeaveKind.Async
+                            : isCallSiteAttr
+                                ? WeaveKind.CallSite
+                                : WeaveKind.Sync,
                         genericWeave,
                         excludeAsyncLikeReturn));
                 }

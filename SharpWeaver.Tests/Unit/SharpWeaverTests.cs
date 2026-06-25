@@ -252,6 +252,38 @@ public class SharpWeaverTests
         Assert.Contains(registry.Errors, error => error.Contains("NoSuchType", StringComparison.Ordinal));
     }
 
+    /// <summary>Dry-run should list call-site matches by caller method and callee.</summary>
+    [Fact]
+    public void DryRun_call_site_lists_call_site_matches()
+    {
+        EnsureAllFixturesBuilt();
+
+        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var exitCode = RunDryRun(references, out var output, out var error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+        Assert.Contains("SharpWeaver.TestFixtures.Fake.CallSiteCallerTarget.RunSimple()", output);
+        Assert.Contains("CallSite:", output);
+        Assert.Contains("ExitSimple", output);
+        Assert.Contains("ExitSimplePatch", output);
+    }
+
+    /// <summary>Dry-run should skip struct instance callees because their hidden receiver is a managed address.</summary>
+    [Fact]
+    public void DryRun_call_site_skips_value_type_instance_call_sites()
+    {
+        EnsureAllFixturesBuilt();
+
+        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var exitCode = RunDryRun(references, out var output, out var error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+        Assert.DoesNotContain("CallSiteStructCalleeTarget.Increment", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("StructInstancePatch", output, StringComparison.Ordinal);
+    }
+
     private static void EnsureAllFixturesBuilt() => FixtureBuildHelper.EnsureAllFixturesBuilt();
 
     private static List<string> BuildReferenceList(string primaryOutputDir, bool includeGodotSharp)

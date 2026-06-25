@@ -99,6 +99,18 @@ public static class BehavioralState
     /// <summary>The most recent generic parameter type names captured by sync generic weaving.</summary>
     public static string[] GenericCapturedTypeParamNames { get; set; } = [];
 
+    /// <summary>Records call-site weave execution order.</summary>
+    public static List<string> CallSiteTrace { get; } = [];
+
+    /// <summary>Exit codes observed by fake call-site callees.</summary>
+    public static List<int> CallSiteExitCodes { get; } = [];
+
+    /// <summary>Whether the conditional call-site template should skip the original call.</summary>
+    public static bool CallSiteSkipOriginal { get; set; }
+
+    /// <summary>Number of times the fake non-void call-site callee executed.</summary>
+    public static int CallSiteNextRuns { get; set; }
+
     /// <summary>Number of times the async target method body inline segment executed.</summary>
     public static int AsyncBodyRuns { get; set; }
 
@@ -186,6 +198,10 @@ public static class BehavioralState
         GenericNonGenericWeaveRuns = 0;
         GenericCapturedMethodName = null;
         GenericCapturedTypeParamNames = [];
+        CallSiteTrace.Clear();
+        CallSiteExitCodes.Clear();
+        CallSiteSkipOriginal = false;
+        CallSiteNextRuns = 0;
         AsyncBodyRuns = 0;
         AsyncPostfixRuns = 0;
         AsyncPrefixRuns = 0;

@@ -76,6 +76,41 @@ public sealed class WeaveExcludeAttribute(string excludedSignature) : Attribute
 public sealed class WeaveExcludeAsyncLikeReturnAttribute : Attribute;
 
 /// <summary>
+/// Marks a SharpWeaver synchronous call-site weave method. Replaces calls to a matching target method with template code.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Unlike <see cref="WeaveAttribute"/>, the target signature identifies the callee instruction to surround,
+/// not the body of that method. This is useful for calls to methods declared in another assembly.
+/// </para>
+/// <para>
+/// The weave method must be <c>static void</c>. Its body may contain one <see cref="WeaveTemplate.OriginalBody"/>
+/// marker; when present and reached, SharpWeaver emits the original call at that point.
+/// Control flow that returns before the marker skips the original call.
+/// </para>
+/// <para>
+/// Parameters map positionally to the call instance (for instance calls) and callee arguments. Parameters may be
+/// declared as <c>ref</c> to mutate the value passed to the original call. Non-void callees may append a trailing
+/// <c>ref TReturn</c> return-value slot after all call arguments.
+/// </para>
+/// </remarks>
+/// <param name="targetSignature">Exact CLR signature or wildcard pattern for the called method.</param>
+/// <param name="priority">Weave priority for multiple call-site templates on the same call site.</param>
+/// <param name="genericWeave">Whether to match methods or declaring types with open generic parameters.</param>
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
+public sealed class WeaveCallSiteAttribute(string targetSignature, int priority, bool genericWeave = false) : Attribute
+{
+    /// <summary>Target callee signature or wildcard pattern string.</summary>
+    public string TargetSignature { get; } = targetSignature;
+
+    /// <summary>Weave priority; smaller values are applied first around a call site.</summary>
+    public int Priority { get; } = priority;
+
+    /// <summary>Whether to match methods or declaring types with open generic parameters.</summary>
+    public bool GenericWeave { get; } = genericWeave;
+}
+
+/// <summary>
 /// Marks a SharpWeaver async weave method. Splices the async weave template into the target state machine's <c>MoveNext</c>.
 /// </summary>
 /// <remarks>

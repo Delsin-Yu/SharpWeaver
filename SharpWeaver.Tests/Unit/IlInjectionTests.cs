@@ -325,6 +325,39 @@ public class IlInjectionTests
         Assert.NotEqual(OpCodes.Ldloc_S, instructions[retIndex - 1].OpCode);
     }
 
+    /// <summary>Call-site weaving should remove template markers and keep the original callee call only when requested.</summary>
+    [Fact]
+    public void Weave_call_site_rewrites_callers_without_markers()
+    {
+        using var temp = CopyFixtureAssemblyToTemp();
+        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+
+        using var assembly = AssemblyDefinition.ReadAssembly(temp.AssemblyPath);
+        var type = assembly.MainModule.EnumerateAllTypes()
+            .First(t => t.FullName == "SharpWeaver.TestFixtures.Fake.CallSiteCallerTarget");
+        var simple = type.Methods.First(m => m.Name == "RunSimple");
+        var skip = type.Methods.First(m => m.Name == "RunSkipVoid");
+
+        Assert.DoesNotContain(simple.Body.Instructions, instr =>
+            instr.OpCode == OpCodes.Call
+            && instr.Operand is MethodReference mr
+            && mr.DeclaringType.FullName == "SharpWeaver.WeaveTemplate"
+            && mr.Name == "OriginalBody");
+
+        Assert.Contains(simple.Body.Instructions, instr =>
+            instr.OpCode == OpCodes.Call
+            && instr.Operand is MethodReference mr
+            && mr.Name == "ExitSimple");
+
+        Assert.DoesNotContain(skip.Body.Instructions, instr =>
+            instr.OpCode == OpCodes.Call
+            && instr.Operand is MethodReference mr
+            && mr.Name == "ExitSkip");
+    }
+
     private static TempAssemblyCopy CopyFixtureAssemblyToTemp()
     {
         EnsureFixturesBuilt();

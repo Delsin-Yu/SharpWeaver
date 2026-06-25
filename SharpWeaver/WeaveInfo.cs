@@ -2,6 +2,19 @@ using Mono.Cecil;
 
 namespace SharpWeaver;
 
+/// <summary>Kind of SharpWeaver template discovered on a weave method.</summary>
+public enum WeaveKind
+{
+    /// <summary>Synchronous method-body weave.</summary>
+    Sync,
+
+    /// <summary>Compiler async state-machine method-body weave.</summary>
+    Async,
+
+    /// <summary>Synchronous call-site weave.</summary>
+    CallSite,
+}
+
 /// <summary>Information about an ILWeaving / AsyncILWeaving weave method discovered in the target assembly.</summary>
 public sealed class WeaveInfo
 {
@@ -15,7 +28,7 @@ public sealed class WeaveInfo
     /// <param name="declaringType">Weave method declaring type fully qualified name.</param>
     /// <param name="discoveryOrder">Scan discovery order (used for stable sorting when priorities are equal).</param>
     /// <param name="excludePatterns">Wildcard target exclusion patterns for this weave method.</param>
-    /// <param name="isAsync">Whether this is an <see cref="AsyncWeaveAttribute"/> async weave.</param>
+    /// <param name="kind">Kind of weave template.</param>
     /// <param name="genericWeave">Whether matching open generic targets is allowed.</param>
     /// <param name="excludeAsyncLikeReturn">Whether sync weaving should exclude async-like return types.</param>
     public WeaveInfo(
@@ -26,7 +39,7 @@ public sealed class WeaveInfo
         string declaringType,
         int discoveryOrder,
         IReadOnlyList<SignaturePattern>? excludePatterns = null,
-        bool isAsync = false,
+        WeaveKind kind = WeaveKind.Sync,
         bool genericWeave = false,
         bool excludeAsyncLikeReturn = false)
     {
@@ -37,7 +50,7 @@ public sealed class WeaveInfo
         DeclaringType = declaringType;
         _discoveryOrder = discoveryOrder;
         ExcludePatterns = excludePatterns ?? [];
-        IsAsync = isAsync;
+        Kind = kind;
         GenericWeave = genericWeave;
         ExcludeAsyncLikeReturn = excludeAsyncLikeReturn;
     }
@@ -60,8 +73,14 @@ public sealed class WeaveInfo
     /// <summary>Scan discovery order.</summary>
     public int DiscoveryOrder => _discoveryOrder;
 
+    /// <summary>Kind of weave template.</summary>
+    public WeaveKind Kind { get; }
+
     /// <summary>Whether this is an async weave (target is state machine <c>MoveNext</c>).</summary>
-    public bool IsAsync { get; }
+    public bool IsAsync => Kind == WeaveKind.Async;
+
+    /// <summary>Whether this is a call-site weave.</summary>
+    public bool IsCallSite => Kind == WeaveKind.CallSite;
 
     /// <summary>Whether to match methods or declaring types with open generic parameters.</summary>
     public bool GenericWeave { get; }

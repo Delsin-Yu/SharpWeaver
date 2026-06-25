@@ -141,6 +141,17 @@ public static class SharpWeaverRunner
             Console.WriteLine(
                 $"  Weave (priority={weave.Priority}): {weave.WeaveMethodDisplayName} [{weave.TargetSignature}]");
         }
+
+        foreach (var callSite in plan.CallSiteMatches)
+        {
+            Console.WriteLine(
+                $"  CallSite: {callSite.CalledMethod.FullName}");
+            foreach (var weave in callSite.Weaves)
+            {
+                Console.WriteLine(
+                    $"    WeaveCallSite (priority={weave.Priority}): {weave.WeaveMethodDisplayName} [{weave.TargetSignature}]");
+            }
+        }
     }
 
     private static List<string> ParseReferences(string? references)

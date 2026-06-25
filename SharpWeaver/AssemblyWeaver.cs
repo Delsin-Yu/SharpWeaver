@@ -62,6 +62,44 @@ public static class AssemblyWeaver
             }
 
             var overrideWoven = true;
+            if (plan.CallSiteMatches.Count > 0)
+            {
+                foreach (var callSite in plan.CallSiteMatches)
+                {
+                    foreach (var weave in callSite.Weaves)
+                    {
+                        if (!WeaveSignatureValidator.TryValidate(
+                                weave,
+                                callSite.ResolvedCalledMethod,
+                                spliceMethod,
+                                plan.OuterMethod,
+                                out var validationError))
+                        {
+                            errors.Add(validationError!);
+                            overrideWoven = false;
+                            break;
+                        }
+                    }
+
+                    if (!overrideWoven)
+                    {
+                        break;
+                    }
+                }
+
+                if (overrideWoven
+                    && !WeaveCallSiteSplicer.TrySplice(spliceMethod, plan.CallSiteMatches, out var callSiteError))
+                {
+                    errors.Add(callSiteError!);
+                    overrideWoven = false;
+                }
+            }
+
+            if (!overrideWoven)
+            {
+                continue;
+            }
+
             foreach (var weave in plan.Weaves)
             {
                 var validationTarget = ResolveValidationTarget(weave, plan, resolver);

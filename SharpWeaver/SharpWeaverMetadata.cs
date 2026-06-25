@@ -9,6 +9,9 @@ internal static class SharpWeaverMetadata
     /// <summary>Fully qualified name of <see cref="AsyncWeaveAttribute"/>.</summary>
     public const string AsyncWeaveAttribute = "SharpWeaver.AsyncWeaveAttribute";
 
+    /// <summary>Fully qualified name of <see cref="WeaveCallSiteAttribute"/>.</summary>
+    public const string WeaveCallSiteAttribute = "SharpWeaver.WeaveCallSiteAttribute";
+
     /// <summary>Fully qualified name of <see cref="WeaveExcludeAttribute"/>.</summary>
     public const string WeaveExcludeAttribute = "SharpWeaver.WeaveExcludeAttribute";
 
@@ -52,4 +55,11 @@ internal static class SharpWeaverMetadata
     /// <returns>Returns <see langword="true"/> if it is an async weave attribute.</returns>
     public static bool IsAsyncWeaveAttribute(string? fullName, string shortName) =>
         fullName == AsyncWeaveAttribute || shortName == nameof(AsyncWeaveAttribute);
+
+    /// <summary>Determines whether the attribute type is a call-site weave attribute.</summary>
+    /// <param name="fullName">Attribute type fully qualified name.</param>
+    /// <param name="shortName">Attribute type short name.</param>
+    /// <returns>Returns <see langword="true"/> if it is a call-site weave attribute.</returns>
+    public static bool IsWeaveCallSiteAttribute(string? fullName, string shortName) =>
+        fullName == WeaveCallSiteAttribute || shortName == nameof(WeaveCallSiteAttribute);
 }

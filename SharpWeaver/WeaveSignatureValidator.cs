@@ -31,6 +31,11 @@ public static class WeaveSignatureValidator
             return TryValidateAsyncWeave(weave, targetMethod, outerMethod, out error);
         }
 
+        if (weave.IsCallSite)
+        {
+            return TryValidateCallSiteWeave(weave, targetMethod, out error);
+        }
+
         if (WeaveCaptureInjector.IsWildcardWeave(weave))
         {
             return TryValidateWildcardWeave(weave, outerMethod, out error);
@@ -82,6 +87,92 @@ public static class WeaveSignatureValidator
         }
 
         return true;
+    }
+
+    private static bool TryValidateCallSiteWeave(
+        WeaveInfo weave,
+        MethodDefinition targetMethod,
+        out string? error)
+    {
+        error = null;
+        var weaveMethod = weave.WeaveMethod;
+
+        if (!TryValidateCallSiteCommon(weaveMethod, out error))
+        {
+            return false;
+        }
+
+        if (weave.Pattern.IsWildcard && HasWildcardCaptureContract(weaveMethod))
+        {
+            return TryValidateWildcardCaptureContract(weave, weaveMethod, out error);
+        }
+
+        var callSlotTypes = GetCallSlotTypes(targetMethod);
+        var isVoidTarget = IlTypeHelper.IsVoidReturn(targetMethod.ReturnType);
+        var hasReturnSlot = false;
+
+        if (!isVoidTarget
+            && weaveMethod.Parameters.Count == callSlotTypes.Count + 1
+            && weaveMethod.Parameters.Count > 0)
+        {
+            var returnParam = weaveMethod.Parameters[weaveMethod.Parameters.Count - 1];
+            if (returnParam.ParameterType.IsByReference
+                && IsSameType(((ByReferenceType)returnParam.ParameterType).ElementType, targetMethod.ReturnType))
+            {
+                hasReturnSlot = true;
+            }
+        }
+
+        var maxParamCount = callSlotTypes.Count + (isVoidTarget ? 0 : 1);
+        if (weaveMethod.Parameters.Count > maxParamCount)
+        {
+            error =
+                $"WeaveCallSite 编织方法 '{weave.WeaveMethodDisplayName}' 的参数数量（{weaveMethod.Parameters.Count}）" +
+                $"不符合预期（0~{maxParamCount}）。";
+            return false;
+        }
+
+        if (weaveMethod.Parameters.Count == callSlotTypes.Count + 1 && !hasReturnSlot)
+        {
+            error =
+                $"WeaveCallSite 编织方法 '{weave.WeaveMethodDisplayName}' 的尾部返回值槽必须为 " +
+                $"ref {SignatureParser.FormatTypeNameForDisplay(targetMethod.ReturnType.FullName)}。";
+            return false;
+        }
+
+        var callParamCount = hasReturnSlot
+            ? weaveMethod.Parameters.Count - 1
+            : weaveMethod.Parameters.Count;
+        for (var i = 0; i < callParamCount; i++)
+        {
+            var weaveParam = weaveMethod.Parameters[i];
+            var expectedType = callSlotTypes[i];
+            var actualType = weaveParam.ParameterType.IsByReference
+                ? ((ByReferenceType)weaveParam.ParameterType).ElementType
+                : weaveParam.ParameterType;
+
+            if (!IsSameType(actualType, expectedType))
+            {
+                error =
+                    $"WeaveCallSite 编织方法 '{weave.WeaveMethodDisplayName}' 的参数 '{weaveParam.Name}' 类型不匹配。" +
+                    $"期望 {SignatureParser.FormatTypeNameForDisplay(expectedType.FullName)}，" +
+                    $"实际 {SignatureParser.FormatTypeNameForDisplay(actualType.FullName)}。";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool HasWildcardCaptureContract(MethodDefinition weaveMethod)
+    {
+        if (WeaveCaptureInjector.HasObjectInstanceSlot(weaveMethod))
+        {
+            return true;
+        }
+
+        var captureKinds = WeaveCaptureInjector.GetCaptureKinds(weaveMethod);
+        return captureKinds.Any(captureKind => captureKind != WeaveCaptureKind.None);
     }
 
     private static bool TryValidateWildcardWeave(
@@ -317,6 +408,50 @@ public static class WeaveSignatureValidator
         return true;
     }
 
+    private static bool TryValidateCallSiteCommon(MethodDefinition weaveMethod, out string? error)
+    {
+        error = null;
+
+        if (!weaveMethod.IsStatic)
+        {
+            error = $"WeaveCallSite 编织方法 '{weaveMethod.DeclaringType.FullName}.{weaveMethod.Name}' 必须为 static。";
+            return false;
+        }
+
+        if (weaveMethod.ReturnType.MetadataType != MetadataType.Void)
+        {
+            error =
+                $"WeaveCallSite 编织方法 '{weaveMethod.DeclaringType.FullName}.{weaveMethod.Name}' 的返回类型必须为 void。";
+            return false;
+        }
+
+        if (AsyncMethodHelper.IsCompilerAsyncMethod(weaveMethod))
+        {
+            error =
+                $"WeaveCallSite 编织方法 '{weaveMethod.DeclaringType.FullName}.{weaveMethod.Name}' 必须为同步方法。";
+            return false;
+        }
+
+        if (!weaveMethod.HasBody)
+        {
+            error =
+                $"WeaveCallSite 编织方法 '{weaveMethod.DeclaringType.FullName}.{weaveMethod.Name}' " +
+                $"必须有方法体（不可为 abstract 或 extern）。";
+            return false;
+        }
+
+        var markerCount = CountSyncMarkerCalls(weaveMethod);
+        if (markerCount > 1)
+        {
+            error =
+                $"WeaveCallSite 编织方法 '{weaveMethod.DeclaringType.FullName}.{weaveMethod.Name}' 中有 {markerCount} 个 " +
+                $"WeaveTemplate.OriginalBody() 标记调用，要求最多一个。";
+            return false;
+        }
+
+        return true;
+    }
+
     private static bool TryValidateAsyncCommon(MethodDefinition weaveMethod, out string? error)
     {
         error = null;
@@ -395,5 +530,28 @@ public static class WeaveSignatureValidator
         }
 
         return count;
+    }
+
+    private static List<TypeReference> GetCallSlotTypes(MethodDefinition targetMethod)
+    {
+        var result = new List<TypeReference>();
+        if (targetMethod.HasThis)
+        {
+            result.Add(targetMethod.DeclaringType);
+        }
+
+        foreach (var parameter in targetMethod.Parameters)
+        {
+            result.Add(parameter.ParameterType);
+        }
+
+        return result;
+    }
+
+    private static bool IsSameType(TypeReference left, TypeReference right)
+    {
+        var leftElement = left.IsByReference ? ((ByReferenceType)left).ElementType : left;
+        var rightElement = right.IsByReference ? ((ByReferenceType)right).ElementType : right;
+        return leftElement.FullName == rightElement.FullName;
     }
 }

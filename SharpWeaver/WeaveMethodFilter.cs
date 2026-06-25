@@ -39,6 +39,11 @@ public static class WeaveMethodFilter
             {
                 return true;
             }
+
+            if (SharpWeaverMetadata.IsWeaveCallSiteAttribute(fullName, name))
+            {
+                return true;
+            }
         }
 
         return false;

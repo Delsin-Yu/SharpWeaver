@@ -383,6 +383,126 @@ public class IlBehavioralTests
         Assert.Equal(1, behavioralState.GenericNonGenericWeaveRuns);
     }
 
+    /// <summary>Call-site should run prefix, original call, and postfix in order.</summary>
+    [Fact]
+    public void Woven_call_site_runs_prefix_original_and_postfix()
+    {
+        using var temp = CopyFixtureAssemblyToTemp();
+        var references = BuildReferenceList(includeGodotSharp: true);
+        var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+
+        var assembly = WovenAssemblyLoader.Load(temp.AssemblyPath, references);
+        var behavioralState = GetBehavioralState(assembly);
+        behavioralState.Reset();
+
+        var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.CallSiteCallerTarget", throwOnError: true)!;
+        var instance = Activator.CreateInstance(type)!;
+        type.GetMethod("RunSimple")!.Invoke(instance, null);
+
+        Assert.Equal(
+            ["caller-before", "patch-start", "original-simple:0", "patch-end", "caller-after"],
+            behavioralState.CallSiteTrace);
+        Assert.Equal([0], behavioralState.CallSiteExitCodes);
+    }
+
+    /// <summary>Call-site should be able to mutate an argument before the original call.</summary>
+    [Fact]
+    public void Woven_call_site_mutates_argument()
+    {
+        using var temp = CopyFixtureAssemblyToTemp();
+        var references = BuildReferenceList(includeGodotSharp: true);
+        var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+
+        var assembly = WovenAssemblyLoader.Load(temp.AssemblyPath, references);
+        var behavioralState = GetBehavioralState(assembly);
+        behavioralState.Reset();
+
+        var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.CallSiteCallerTarget", throwOnError: true)!;
+        var instance = Activator.CreateInstance(type)!;
+        type.GetMethod("RunParameterMutation")!.Invoke(instance, null);
+
+        Assert.Equal(["patch-parameter", "original-parameter:42"], behavioralState.CallSiteTrace);
+        Assert.Equal([42], behavioralState.CallSiteExitCodes);
+    }
+
+    /// <summary>Call-site without a marker should skip the original void call.</summary>
+    [Fact]
+    public void Woven_call_site_skips_void_original_call()
+    {
+        using var temp = CopyFixtureAssemblyToTemp();
+        var references = BuildReferenceList(includeGodotSharp: true);
+        var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+
+        var assembly = WovenAssemblyLoader.Load(temp.AssemblyPath, references);
+        var behavioralState = GetBehavioralState(assembly);
+        behavioralState.Reset();
+
+        var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.CallSiteCallerTarget", throwOnError: true)!;
+        var instance = Activator.CreateInstance(type)!;
+        type.GetMethod("RunSkipVoid")!.Invoke(instance, null);
+
+        Assert.Equal(["patch-skip-start", "patch-skip-end", "caller-continued"], behavioralState.CallSiteTrace);
+        Assert.Empty(behavioralState.CallSiteExitCodes);
+    }
+
+    /// <summary>Call-site should conditionally skip or run the original call.</summary>
+    [Fact]
+    public void Woven_call_site_conditionally_skips_original_call()
+    {
+        using var temp = CopyFixtureAssemblyToTemp();
+        var references = BuildReferenceList(includeGodotSharp: true);
+        var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+
+        var assembly = WovenAssemblyLoader.Load(temp.AssemblyPath, references);
+        var behavioralState = GetBehavioralState(assembly);
+        behavioralState.Reset();
+
+        var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.CallSiteCallerTarget", throwOnError: true)!;
+        var instance = Activator.CreateInstance(type)!;
+        var runConditional = type.GetMethod("RunConditional")!;
+
+        behavioralState.CallSiteSkipOriginal = true;
+        runConditional.Invoke(instance, null);
+        Assert.Equal(["patch-conditional", "caller-continued"], behavioralState.CallSiteTrace);
+        Assert.Empty(behavioralState.CallSiteExitCodes);
+
+        behavioralState.Reset();
+        runConditional.Invoke(instance, null);
+        Assert.Equal(["patch-conditional", "original-conditional:24", "caller-continued"], behavioralState.CallSiteTrace);
+        Assert.Equal([24], behavioralState.CallSiteExitCodes);
+    }
+
+    /// <summary>Call-site should replace a non-void call through the trailing return slot.</summary>
+    [Fact]
+    public void Woven_call_site_replaces_return_value()
+    {
+        using var temp = CopyFixtureAssemblyToTemp();
+        var references = BuildReferenceList(includeGodotSharp: true);
+        var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+
+        var assembly = WovenAssemblyLoader.Load(temp.AssemblyPath, references);
+        var behavioralState = GetBehavioralState(assembly);
+        behavioralState.Reset();
+
+        var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.CallSiteCallerTarget", throwOnError: true)!;
+        var instance = Activator.CreateInstance(type)!;
+        var result = type.GetMethod("RunReturnReplacement")!.Invoke(instance, null);
+
+        Assert.Equal(42, result);
+        Assert.Equal(["patch-return"], behavioralState.CallSiteTrace);
+        Assert.Equal(0, behavioralState.CallSiteNextRuns);
+    }
+
     private static BehavioralStateAccessor GetBehavioralState(Assembly assembly)
     {
         var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.BehavioralState", throwOnError: true)!;
@@ -478,6 +598,21 @@ public class IlBehavioralTests
 
         public string[] GenericCapturedTypeParamNames =>
             (string[])_type.GetProperty(nameof(GenericCapturedTypeParamNames))!.GetValue(null)!;
+
+        public List<string> CallSiteTrace =>
+            (List<string>)_type.GetProperty(nameof(CallSiteTrace))!.GetValue(null)!;
+
+        public List<int> CallSiteExitCodes =>
+            (List<int>)_type.GetProperty(nameof(CallSiteExitCodes))!.GetValue(null)!;
+
+        public bool CallSiteSkipOriginal
+        {
+            get => (bool)_type.GetProperty(nameof(CallSiteSkipOriginal))!.GetValue(null)!;
+            set => _type.GetProperty(nameof(CallSiteSkipOriginal))!.SetValue(null, value);
+        }
+
+        public int CallSiteNextRuns =>
+            (int)_type.GetProperty(nameof(CallSiteNextRuns))!.GetValue(null)!;
 
         public void Reset() => _type.GetMethod(nameof(Reset))!.Invoke(null, null);
     }
