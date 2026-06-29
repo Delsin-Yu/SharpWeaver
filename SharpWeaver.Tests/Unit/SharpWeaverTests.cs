@@ -5,27 +5,21 @@ using Xunit;
 namespace SharpWeaver.Tests;
 
 /// <summary>Signature parsing, weave discovery, override matching, and dry-run tests.</summary>
+[TestProgress]
 public class SharpWeaverTests
 {
-    private static readonly string DotnetProjectsDir = FixtureBuildHelper.ProjectRoot;
-    private static readonly string TestsDir = FixtureBuildHelper.TestsDirectory;
-
-    private static readonly string FixturesProjectDir = Path.Combine(TestsDir, "Fixtures");
-
-    private static readonly string FixturesOutputDir = Path.Combine(
-        FixturesProjectDir, "bin", "Debug", "net10.0");
+    private static readonly string FixturesOutputDir = FixtureBuildHelper.FixturesOutputDir;
 
     private static readonly string BadSignatureOutputDir = Path.Combine(
-        TestsDir, "BadSignature", "bin", "Debug", "net10.0");
+        FixtureBuildHelper.TestsDirectory, "BadSignature", "bin", "Debug", "net10.0");
 
     private static readonly string InstancePatchOutputDir = Path.Combine(
-        TestsDir, "InstancePatch", "bin", "Debug", "net10.0");
+        FixtureBuildHelper.TestsDirectory, "InstancePatch", "bin", "Debug", "net10.0");
 
     private static readonly string DuplicatePrefixOutputDir = Path.Combine(
-        TestsDir, "DuplicatePrefix", "bin", "Debug", "net10.0");
+        FixtureBuildHelper.TestsDirectory, "DuplicatePrefix", "bin", "Debug", "net10.0");
 
-    private static readonly string FixtureAssemblyPath = Path.Combine(
-        FixturesOutputDir, "SharpWeaver.TestFixtures.dll");
+    private static readonly string FixtureAssemblyPath = FixtureBuildHelper.FixtureAssemblyPath;
 
     private static readonly string BadSignatureAssemblyPath = Path.Combine(
         BadSignatureOutputDir, "SharpWeaver.TestFixtures.BadSignature.dll");
@@ -35,11 +29,6 @@ public class SharpWeaverTests
 
     private static readonly string DuplicatePrefixAssemblyPath = Path.Combine(
         DuplicatePrefixOutputDir, "SharpWeaver.TestFixtures.DuplicatePrefix.dll");
-
-    private static readonly string GodotSharpPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".nuget", "packages", "godotsharp", "4.6.1", "lib", "net8.0", "GodotSharp.dll");
-
     /// <summary>Builds test fixture assemblies.</summary>
     [Fact]
     public void Build_fixtures_succeeds()
@@ -48,29 +37,27 @@ public class SharpWeaverTests
         Assert.True(File.Exists(FixtureAssemblyPath), $"Fixture assembly not found: {FixtureAssemblyPath}");
     }
 
-    /// <summary>Dry run should discover and list ILWeaving targets and overrides for <c>Godot.Node._Process(double)</c>.</summary>
+    /// <summary>Dry run should discover external-base tick overrides when the base assembly is referenced.</summary>
     [Fact]
-    public void DryRun_resolves_Godot_Node_Process_when_GodotSharp_in_references()
+    public void DryRun_resolves_external_base_tick_override_when_base_in_references()
     {
         EnsureAllFixturesBuilt();
-        Assert.True(File.Exists(GodotSharpPath), $"GodotSharp.dll not found at: {GodotSharpPath}");
 
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunDryRun(references, out var output, out var error);
 
         Assert.Equal(0, exitCode);
-        Assert.Contains("SharpWeaver.TestFixtures.Godot.GodotProcessNode._Process(double)", output);
-        Assert.Contains("ProcessWeave", output);
+        Assert.Contains("SharpWeaver.TestFixtures.Fake.DerivedTickNode.Tick(double)", output);
+        Assert.Contains("TickWeave", output);
         Assert.Empty(error);
     }
-
     /// <summary>Unresolvable signatures should output actionable errors and return a non-zero exit code.</summary>
     [Fact]
     public void DryRun_unresolvable_signature_prints_actionable_error()
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(BadSignatureOutputDir, includeGodotSharp: false);
+        var references = BuildReferenceList(BadSignatureOutputDir);
         var exitCode = RunDryRun(references, out _, out var error, BadSignatureAssemblyPath);
 
         Assert.NotEqual(0, exitCode);
@@ -83,7 +70,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(InstancePatchOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(InstancePatchOutputDir);
         var exitCode = RunDryRun(references, out _, out var error, InstancePatchAssemblyPath);
 
         Assert.NotEqual(0, exitCode);
@@ -96,7 +83,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunDryRun(references, out var output, out var error);
 
         Assert.Equal(0, exitCode);
@@ -112,7 +99,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunDryRun(references, out var output, out var error);
 
         Assert.Equal(0, exitCode);
@@ -127,7 +114,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(DuplicatePrefixOutputDir, includeGodotSharp: false);
+        var references = BuildReferenceList(DuplicatePrefixOutputDir);
         var exitCode = RunDryRun(references, out var output, out var error, DuplicatePrefixAssemblyPath);
 
         Assert.Equal(0, exitCode);
@@ -136,7 +123,7 @@ public class SharpWeaverTests
         Assert.Contains("WeaveB", output, StringComparison.Ordinal);
         Assert.True(
             output.IndexOf("WeaveA", StringComparison.Ordinal) < output.IndexOf("WeaveB", StringComparison.Ordinal),
-            "WeaveA 应在 WeaveB 之前出现（发现顺序）。");
+            "WeaveA ?? WeaveB ????????????);
     }
 
     /// <summary>Invalid wildcard patterns should fail during scanning.</summary>
@@ -145,7 +132,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(BadSignatureOutputDir, includeGodotSharp: false);
+        var references = BuildReferenceList(BadSignatureOutputDir);
         var exitCode = RunDryRun(references, out _, out var error, BadSignatureAssemblyPath);
 
         Assert.NotEqual(0, exitCode);
@@ -158,7 +145,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunDryRun(references, out var output, out var error);
 
         Assert.Equal(0, exitCode);
@@ -173,7 +160,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunDryRun(references, out var output, out var error);
 
         Assert.Equal(0, exitCode);
@@ -189,12 +176,12 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(DuplicatePrefixOutputDir, includeGodotSharp: false);
+        var references = BuildReferenceList(DuplicatePrefixOutputDir);
         using var resolver = new ReferenceAssemblyResolver(DuplicatePrefixAssemblyPath, references);
         WeaveScanner.Scan(resolver.WovenAssembly, out var weaves, out _);
         var plannerResult = MethodWeavePlanner.Plan(weaves, resolver, resolver.WovenAssembly.MainModule);
 
-        Assert.True(plannerResult.Success, $"Planner 不应有错误：{string.Join(", ", plannerResult.Errors)}");
+        Assert.True(plannerResult.Success, $"Planner ??????{string.Join(", ", plannerResult.Errors)}");
         Assert.Single(plannerResult.Plans);
         var plan = plannerResult.Plans[0];
         Assert.Equal(2, plan.Weaves.Count);
@@ -210,12 +197,12 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(DuplicatePrefixOutputDir, includeGodotSharp: false);
+        var references = BuildReferenceList(DuplicatePrefixOutputDir);
         using var resolver = new ReferenceAssemblyResolver(DuplicatePrefixAssemblyPath, references);
         WeaveScanner.Scan(resolver.WovenAssembly, out var weaves, out _);
         var registry = WeaveRegistry.Build(weaves, resolver, resolver.WovenAssembly.MainModule);
 
-        Assert.True(registry.Success, $"WeaveRegistry 不应有错误：{string.Join(", ", registry.Errors)}");
+        Assert.True(registry.Success, $"WeaveRegistry ??????{string.Join(", ", registry.Errors)}");
         Assert.Single(registry.Bindings);
         var binding = registry.Bindings[0];
         Assert.Equal(2, binding.Weaves.Count);
@@ -231,7 +218,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(InstancePatchOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(InstancePatchOutputDir);
         using var resolver = new ReferenceAssemblyResolver(InstancePatchAssemblyPath, references);
         WeaveScanner.Scan(resolver.WovenAssembly, out _, out var scanErrors);
 
@@ -244,7 +231,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(BadSignatureOutputDir, includeGodotSharp: false);
+        var references = BuildReferenceList(BadSignatureOutputDir);
         using var resolver = new ReferenceAssemblyResolver(BadSignatureAssemblyPath, references);
         WeaveScanner.Scan(resolver.WovenAssembly, out var weaves, out _);
         var registry = WeaveRegistry.Build(weaves, resolver, resolver.WovenAssembly.MainModule);
@@ -258,7 +245,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunDryRun(references, out var output, out var error);
 
         Assert.Equal(0, exitCode);
@@ -275,7 +262,7 @@ public class SharpWeaverTests
     {
         EnsureAllFixturesBuilt();
 
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunDryRun(references, out var output, out var error);
 
         Assert.Equal(0, exitCode);
@@ -286,17 +273,12 @@ public class SharpWeaverTests
 
     private static void EnsureAllFixturesBuilt() => FixtureBuildHelper.EnsureAllFixturesBuilt();
 
-    private static List<string> BuildReferenceList(string primaryOutputDir, bool includeGodotSharp)
+    private static List<string> BuildReferenceList(string primaryOutputDir)
     {
         var references = new List<string>();
         foreach (var file in Directory.GetFiles(primaryOutputDir, "*.dll"))
         {
             references.Add(file);
-        }
-
-        if (includeGodotSharp && File.Exists(GodotSharpPath))
-        {
-            references.Add(GodotSharpPath);
         }
 
         return references;
@@ -308,29 +290,10 @@ public class SharpWeaverTests
         out IReadOnlyList<string> error,
         string? assemblyPath = null)
     {
-        var toolPath = Path.Combine(DotnetProjectsDir, "SharpWeaver", "bin", "Debug", "net10.0", "SharpWeaver.dll");
-        var refsArg = string.Join(";", references);
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            Arguments =
-                $"\"{toolPath}\" --dry-run --assembly \"{assemblyPath ?? FixtureAssemblyPath}\" --references \"{refsArg}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-
-        using var process = Process.Start(psi);
-        Assert.NotNull(process);
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        output = stdout;
-        error = stderr
-            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
-        return process.ExitCode;
+        return TestWeaverInvoker.RunDryRun(
+            assemblyPath ?? FixtureAssemblyPath,
+            references,
+            out output,
+            out error);
     }
 }

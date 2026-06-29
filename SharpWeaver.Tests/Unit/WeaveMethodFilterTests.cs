@@ -5,6 +5,7 @@ using Xunit;
 namespace SharpWeaver.Tests;
 
 /// <summary><see cref="WeaveMethodFilter"/> and <see cref="WeaveTemplateCalleeCollector"/> exclusion rule tests.</summary>
+[TestProgress]
 public class WeaveMethodFilterTests
 {
     /// <summary>After building fixtures, constructors of <see cref="Attribute"/> derived types should not be wildcard match candidates.</summary>

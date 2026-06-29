@@ -2,10 +2,10 @@ using GodotTask;
 
 namespace SharpWeaver.TestFixtures.Fake;
 
-/// <summary>Async GDTask weave test target.</summary>
-public class AsyncGdTaskTarget
+/// <summary>Async custom async-like return type weave test target.</summary>
+public class AsyncCustomTaskTarget
 {
-    /// <summary>Single-await async GDTask method.</summary>
+    /// <summary>Single-await async custom task method.</summary>
     public async GDTask SingleAwaitAsync()
     {
         BehavioralState.AsyncBodyRuns++;
@@ -13,7 +13,7 @@ public class AsyncGdTaskTarget
         BehavioralState.AsyncPostfixRuns++;
     }
 
-    /// <summary>Multi-await async GDTask method with loop-hoisted fields (close to production GDTask state machine).</summary>
+    /// <summary>Multi-await async custom task method with loop-hoisted fields.</summary>
     public async GDTask MultiAwaitAsync()
     {
         BehavioralState.AsyncBodyRuns++;
@@ -29,7 +29,7 @@ public class AsyncGdTaskTarget
         BehavioralState.AsyncPostfixRuns++;
     }
 
-    /// <summary>Single-await async GDTask&lt;T&gt; method.</summary>
+    /// <summary>Single-await async custom task generic method.</summary>
     public async GDTask<int> GenericAwaitAsync()
     {
         BehavioralState.AsyncBodyRuns++;
@@ -38,7 +38,7 @@ public class AsyncGdTaskTarget
         return 42;
     }
 
-    /// <summary>Open generic async GDTask&lt;T&gt; method.</summary>
+    /// <summary>Open generic async custom task method.</summary>
     public async GDTask<T> GenericMethodResultAsync<T>(T value)
     {
         BehavioralState.AsyncGenericBodyRuns++;
@@ -47,6 +47,6 @@ public class AsyncGdTaskTarget
         return value;
     }
 
-    /// <summary>Synchronously returns GDTask (not compiler-generated async, should go through sync weave path).</summary>
+    /// <summary>Synchronously returns a completed custom task (sync weave candidate).</summary>
     public GDTask SyncCompletedAsync() => GDTask.CompletedTask;
 }

@@ -5,6 +5,7 @@ using Xunit;
 namespace SharpWeaver.Tests;
 
 /// <summary>Post-weave runtime behavior tests (skip, postfix order, exception handling, composition order).</summary>
+[TestProgress]
 public class IlBehavioralTests
 {
     private static readonly string DotnetProjectsDir = FixtureBuildHelper.ProjectRoot;
@@ -20,10 +21,6 @@ public class IlBehavioralTests
     private static readonly string DuplicatePrefixAssemblyPath = Path.Combine(
         DuplicatePrefixOutputDir, "SharpWeaver.TestFixtures.DuplicatePrefix.dll");
 
-    private static readonly string GodotSharpPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".nuget", "packages", "godotsharp", "4.6.1", "lib", "net8.0", "GodotSharp.dll");
-
     /// <summary>
     /// IntReturnWeave: when IntReturnPrefixValue has a value, skip the original body and return that value.
     /// </summary>
@@ -31,7 +28,7 @@ public class IlBehavioralTests
     public void Woven_ILWeaving_skip_returns_prefix_value_when_set()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -56,7 +53,7 @@ public class IlBehavioralTests
     public void Woven_ILWeaving_skip_runs_original_body_when_prefix_value_null()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -78,7 +75,7 @@ public class IlBehavioralTests
     public void Woven_postfix_runs_after_original_body_on_normal_path()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -102,7 +99,7 @@ public class IlBehavioralTests
     public void Woven_exception_handler_runs_when_original_body_throws()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -127,7 +124,7 @@ public class IlBehavioralTests
     public void Woven_exception_handler_not_called_on_successful_body()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -150,7 +147,7 @@ public class IlBehavioralTests
     public void Woven_ILWeaving_splice_runs_original_body_then_postfix_in_order()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -207,7 +204,7 @@ public class IlBehavioralTests
     public void Woven_regex_weave_only_hits_matching_method()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -232,7 +229,7 @@ public class IlBehavioralTests
     public void Woven_ILWeavingExclude_removes_target_from_wildcard_weave()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -258,7 +255,7 @@ public class IlBehavioralTests
     public void Woven_wildcard_non_void_branch_to_ret_returns_correct_value()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -285,7 +282,7 @@ public class IlBehavioralTests
     public void Woven_init_property_setter_assigns_value()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -303,12 +300,40 @@ public class IlBehavioralTests
         Assert.Equal(1, behavioralState.InitPropertySetterBodyRuns);
     }
 
+    /// <summary>Managed byref-return targets should remain callable after wildcard weaving.</summary>
+    [Fact]
+    public void Woven_byref_return_method_returns_original_reference()
+    {
+        using var temp = CopyFixtureAssemblyToTemp();
+        var references = BuildReferenceList();
+        var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+
+        var assembly = WovenAssemblyLoader.Load(temp.AssemblyPath, references);
+        var openType = assembly.GetType("SharpWeaver.TestFixtures.Fake.ByRefReturnTarget`1", throwOnError: true)!;
+        var closedType = openType.MakeGenericType(typeof(int));
+        closedType.GetMethod("SetValue", BindingFlags.Static | BindingFlags.Public)!.Invoke(null, [123]);
+
+        var getValueRef = closedType.GetMethod(
+            "GetValueRefOrNullRefReadOnly",
+            BindingFlags.Static | BindingFlags.Public)!;
+        var getValueRefDelegate = (ByRefReturnIntDelegate)Delegate.CreateDelegate(
+            typeof(ByRefReturnIntDelegate),
+            getValueRef);
+
+        ref readonly var value = ref getValueRefDelegate(true, out var hasValue);
+
+        Assert.True(hasValue);
+        Assert.Equal(123, value);
+    }
+
     /// <summary>Open generic methods should only match generic-aware templates and capture runtime generic type arguments.</summary>
     [Fact]
     public void Woven_generic_method_uses_generic_weave_and_captures_type_params()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -335,7 +360,7 @@ public class IlBehavioralTests
     public void Woven_generic_declaring_type_method_captures_declaring_type_params()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -363,7 +388,7 @@ public class IlBehavioralTests
     public void Woven_non_generic_method_in_generic_fixture_area_uses_regular_weave()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -388,7 +413,7 @@ public class IlBehavioralTests
     public void Woven_call_site_runs_prefix_original_and_postfix()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -412,7 +437,7 @@ public class IlBehavioralTests
     public void Woven_call_site_mutates_argument()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -434,7 +459,7 @@ public class IlBehavioralTests
     public void Woven_call_site_skips_void_original_call()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -456,7 +481,7 @@ public class IlBehavioralTests
     public void Woven_call_site_conditionally_skips_original_call()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -485,7 +510,7 @@ public class IlBehavioralTests
     public void Woven_call_site_replaces_return_value()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(includeGodotSharp: true);
+        var references = BuildReferenceList();
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -508,6 +533,8 @@ public class IlBehavioralTests
         var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.BehavioralState", throwOnError: true)!;
         return new BehavioralStateAccessor(type);
     }
+
+    private delegate ref readonly int ByRefReturnIntDelegate(bool enabled, out bool hasValue);
 
     private sealed class BehavioralStateAccessor
     {
@@ -649,40 +676,14 @@ public class IlBehavioralTests
         return new TempAssemblyCopy(tempDir, targetAssembly, targetPdb);
     }
 
-    private static void EnsureAllFixturesBuilt()
-    {
-        if (File.Exists(FixtureAssemblyPath) && File.Exists(DuplicatePrefixAssemblyPath))
-        {
-            return;
-        }
+    private static void EnsureAllFixturesBuilt() => FixtureBuildHelper.EnsureAllFixturesBuilt();
 
-        var psi = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            Arguments =
-                $"build \"{Path.Combine(TestsDir, "SharpWeaver.Tests", "SharpWeaver.Tests.csproj")}\" -c Debug",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-
-        using var process = Process.Start(psi);
-        Assert.NotNull(process);
-        process.WaitForExit();
-        Assert.Equal(0, process.ExitCode);
-    }
-
-    private static List<string> BuildReferenceList(bool includeGodotSharp)
+    private static List<string> BuildReferenceList()
     {
         var references = new List<string>();
         foreach (var file in Directory.GetFiles(FixturesOutputDir, "*.dll"))
         {
             references.Add(file);
-        }
-
-        if (includeGodotSharp && File.Exists(GodotSharpPath))
-        {
-            references.Add(GodotSharpPath);
         }
 
         return references;
@@ -700,31 +701,7 @@ public class IlBehavioralTests
     }
 
     private static int RunWeaver(string assemblyPath, IReadOnlyList<string> references, out IReadOnlyList<string> error)
-    {
-        var toolPath = FixtureBuildHelper.WeaverToolPath;
-        var refsArg = string.Join(";", references);
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            Arguments = $"\"{toolPath}\" --assembly \"{assemblyPath}\" --references \"{refsArg}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-
-        using var process = Process.Start(psi);
-        Assert.NotNull(process);
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        _ = stdout;
-        error = stderr
-            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
-        return process.ExitCode;
-    }
+        => TestWeaverInvoker.RunWeave(assemblyPath, references, out error);
 
     private sealed class TempAssemblyCopy : IDisposable
     {

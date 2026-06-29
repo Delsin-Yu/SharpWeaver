@@ -4,6 +4,7 @@ using Xunit;
 namespace SharpWeaver.Tests;
 
 /// <summary><see cref="WildcardSignatureParser"/> parsing tests.</summary>
+[TestProgress]
 public class WildcardSignatureParserTests
 {
     /// <summary>Exact signatures without wildcards should go through <see cref="SignaturePatternParser"/>'s exact branch.</summary>
@@ -11,7 +12,10 @@ public class WildcardSignatureParserTests
     public void SignaturePatternParser_exact_signature_has_no_wildcard()
     {
         Assert.True(
-            SignaturePatternParser.TryParse("Godot.Node._Process(double)", out var pattern, out var error),
+            SignaturePatternParser.TryParse(
+                "SharpWeaver.TestFixtures.ExternalBase.TickHost.Tick(double)",
+                out var pattern,
+                out var error),
             error);
         Assert.True(pattern!.IsExact);
     }
@@ -20,7 +24,7 @@ public class WildcardSignatureParserTests
     [Fact]
     public void SignaturePatternParser_rejects_caret_regex_prefix()
     {
-        Assert.False(SignaturePatternParser.TryParse(@"^AkisFarm\.Services\..+", out _, out var error));
+        Assert.False(SignaturePatternParser.TryParse(@"^SampleApp\.Services\..+", out _, out var error));
         Assert.Contains("removed", error, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("'^'", error);
     }
@@ -30,13 +34,13 @@ public class WildcardSignatureParserTests
     public void SignaturePatternParser_parses_wildcard_signature()
     {
         Assert.True(
-            SignaturePatternParser.TryParse("AkisFarm.Services.**.*.*(**)", out var pattern, out var error),
+            SignaturePatternParser.TryParse("SampleApp.Services.**.*.*(**)", out var pattern, out var error),
             error);
         Assert.True(pattern!.IsWildcard);
         var wildcard = ((WildcardSignaturePatternWrapper)pattern).Parsed;
         Assert.Equal(3, wildcard.NamespaceSegments.Count);
         Assert.Equal(SegmentPatternKind.Exact, wildcard.NamespaceSegments[0].Kind);
-        Assert.Equal("AkisFarm", wildcard.NamespaceSegments[0].Literal);
+        Assert.Equal("SampleApp", wildcard.NamespaceSegments[0].Literal);
         Assert.Equal(SegmentPatternKind.ZeroOrMore, wildcard.NamespaceSegments[2].Kind);
         Assert.Equal(SegmentPatternKind.AnySingle, wildcard.TypeName.Kind);
         Assert.Equal(SegmentPatternKind.AnySingle, wildcard.MethodName.Kind);

@@ -5,6 +5,7 @@ using Xunit;
 namespace SharpWeaver.Tests;
 
 /// <summary><see cref="IlTypeHelper"/> unit tests.</summary>
+[TestProgress]
 public class IlTypeHelperTests
 {
     /// <summary>

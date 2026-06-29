@@ -5,25 +5,26 @@ using Xunit;
 namespace SharpWeaver.Tests;
 
 /// <summary>Segment and parameter list wildcard matching tests.</summary>
+[TestProgress]
 public class WildcardMatcherTests
 {
     /// <summary>Single <c>*</c> namespace segment should match exactly one segment.</summary>
     [Fact]
     public void SegmentMatcher_star_matches_one_namespace_segment()
     {
-        var pattern = new[] { SegmentPattern.Exact("AkisFarm"), SegmentPattern.AnySingle };
-        Assert.True(SegmentMatcher.MatchSequence(pattern, ["AkisFarm", "Services"]));
-        Assert.False(SegmentMatcher.MatchSequence(pattern, ["AkisFarm"]));
+        var pattern = new[] { SegmentPattern.Exact("SampleApp"), SegmentPattern.AnySingle };
+        Assert.True(SegmentMatcher.MatchSequence(pattern, ["SampleApp", "Services"]));
+        Assert.False(SegmentMatcher.MatchSequence(pattern, ["SampleApp"]));
     }
 
     /// <summary>Single <c>**</c> namespace segment should match zero or more segments.</summary>
     [Fact]
     public void SegmentMatcher_double_star_matches_zero_or_more_namespace_segments()
     {
-        var pattern = new[] { SegmentPattern.Exact("AkisFarm"), SegmentPattern.Exact("Services"), SegmentPattern.ZeroOrMore };
-        Assert.True(SegmentMatcher.MatchSequence(pattern, ["AkisFarm", "Services"]));
-        Assert.True(SegmentMatcher.MatchSequence(pattern, ["AkisFarm", "Services", "PlayerShop"]));
-        Assert.False(SegmentMatcher.MatchSequence(pattern, ["AkisFarm", "Utils"]));
+        var pattern = new[] { SegmentPattern.Exact("SampleApp"), SegmentPattern.Exact("Services"), SegmentPattern.ZeroOrMore };
+        Assert.True(SegmentMatcher.MatchSequence(pattern, ["SampleApp", "Services"]));
+        Assert.True(SegmentMatcher.MatchSequence(pattern, ["SampleApp", "Services", "Catalog"]));
+        Assert.False(SegmentMatcher.MatchSequence(pattern, ["SampleApp", "Utils"]));
     }
 
     /// <summary>Character-level glob <c>*base</c> should match <c>Database</c>.</summary>
@@ -38,7 +39,7 @@ public class WildcardMatcherTests
     [Fact]
     public void SegmentMatcher_glob_matches_contains()
     {
-        Assert.True(SegmentMatcher.MatchName(SegmentPattern.Glob("*Service*"), "PlaceableServiceClient"));
+        Assert.True(SegmentMatcher.MatchName(SegmentPattern.Glob("*Service*"), "CatalogServiceClient"));
         Assert.True(SegmentMatcher.MatchName(SegmentPattern.Glob("*String"), "ToString"));
     }
 
@@ -83,16 +84,16 @@ public class WildcardMatcherTests
         Assert.True(ParameterListMatcher.Match(parsed.Parameters, []));
     }
 
-    /// <summary><c>AkisFarm.Services.**.*.*(**)</c> should match service types under direct child namespaces.</summary>
+    /// <summary><c>SampleApp.Services.**.*.*(**)</c> should match service types under direct child namespaces.</summary>
     [Fact]
     public void WildcardSignatureMatcher_services_pattern_matches_direct_child_type()
     {
         Assert.True(
-            WildcardSignatureParser.TryParse("AkisFarm.Services.**.*.*(**)", out var parsed, out var error),
+            WildcardSignatureParser.TryParse("SampleApp.Services.**.*.*(**)", out var parsed, out var error),
             error);
-        var candidateNs = new[] { "AkisFarm", "Services" };
+        var candidateNs = new[] { "SampleApp", "Services" };
         Assert.True(SegmentMatcher.MatchSequence(parsed!.NamespaceSegments, candidateNs));
-        Assert.True(SegmentMatcher.MatchName(parsed.TypeName, "PlaceableServiceClient"));
+        Assert.True(SegmentMatcher.MatchName(parsed.TypeName, "CatalogServiceClient"));
         Assert.True(SegmentMatcher.MatchName(parsed.MethodName, "Run"));
         Assert.True(ParameterListMatcher.Match(parsed.Parameters, ["int"]));
     }
@@ -102,16 +103,16 @@ public class WildcardMatcherTests
     public void WildcardSignatureMatcher_nested_type_uses_outer_type_path_as_namespace()
     {
         Assert.True(
-            WildcardSignatureParser.TryParse("AkisFarm.Utils.Profiling.**.*.Dispose()", out var parsed, out var error),
+            WildcardSignatureParser.TryParse("SampleApp.Utils.Instrumentation.**.*.Dispose()", out var parsed, out var error),
             error);
 
         var outer = new TypeDefinition(
-            "AkisFarm.Utils.Profiling",
-            "TracyProfiler",
+            "SampleApp.Utils.Instrumentation",
+            "TraceProfiler",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
         var nested = new TypeDefinition(
             string.Empty,
-            "Zone",
+            "Scope",
             TypeAttributes.NestedPublic | TypeAttributes.Sealed);
         outer.NestedTypes.Add(nested);
         var dispose = new MethodDefinition(
@@ -128,29 +129,36 @@ public class WildcardMatcherTests
     public void WeaveExclusionMatcher_exact_signature_excludes_matching_method()
     {
         Assert.True(
-            SignaturePatternParser.TryParse("AkisFarm.UI.Controls.ItemDetail.ItemDetailScrollBar._Process(double)", out var pattern, out var error),
+            SignaturePatternParser.TryParse(
+                "SampleApp.UI.Controls.Widget.WidgetScrollBar.Tick(double)",
+                out var pattern,
+                out var error),
             error);
 
         var declaringType = new TypeDefinition(
-            "AkisFarm.UI.Controls.ItemDetail",
-            "ItemDetailScrollBar",
+            "SampleApp.UI.Controls.Widget",
+            "WidgetScrollBar",
             TypeAttributes.Public);
-        var process = new MethodDefinition(
-            "_Process",
+        var tick = new MethodDefinition(
+            "Tick",
             MethodAttributes.Public,
             new TypeReference("System", "Void", null, null));
-        process.Parameters.Add(new ParameterDefinition(new TypeReference("System", "Double", null, null)));
-        declaringType.Methods.Add(process);
+        tick.Parameters.Add(new ParameterDefinition(new TypeReference("System", "Double", null, null)));
+        declaringType.Methods.Add(tick);
 
         var weave = new WeaveInfo(
-            "Godot.Node._Process(double)",
-            SignaturePattern.Exact(new ParsedSignature("Godot.Node._Process(double)", "Godot.Node", "_Process", ["System.Double"])),
+            "SharpWeaver.TestFixtures.ExternalBase.TickHost.Tick(double)",
+            SignaturePattern.Exact(new ParsedSignature(
+                "SharpWeaver.TestFixtures.ExternalBase.TickHost.Tick(double)",
+                "SharpWeaver.TestFixtures.ExternalBase.TickHost",
+                "Tick",
+                ["System.Double"])),
             0,
-            process,
+            tick,
             "PatchType",
             0,
             [pattern!]);
 
-        Assert.True(WeaveExclusionMatcher.IsExcluded(weave, process));
+        Assert.True(WeaveExclusionMatcher.IsExcluded(weave, tick));
     }
 }

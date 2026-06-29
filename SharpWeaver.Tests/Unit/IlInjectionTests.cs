@@ -7,6 +7,7 @@ using Xunit;
 namespace SharpWeaver.Tests;
 
 /// <summary>Round 3 IL injection and PDB write-back tests.</summary>
+[TestProgress]
 public class IlInjectionTests
 {
     private static readonly string DotnetProjectsDir = FixtureBuildHelper.ProjectRoot;
@@ -21,16 +22,12 @@ public class IlInjectionTests
     private static readonly string DuplicatePrefixAssemblyPath = Path.Combine(
         DuplicatePrefixOutputDir, "SharpWeaver.TestFixtures.DuplicatePrefix.dll");
 
-    private static readonly string GodotSharpPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".nuget", "packages", "godotsharp", "4.6.1", "lib", "net8.0", "GodotSharp.dll");
-
     /// <summary>ILWeaving branch skip should emit a conditional branch before the marker.</summary>
     [Fact]
     public void Weave_ILWeaving_skip_emits_branch_before_original_body()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -57,7 +54,7 @@ public class IlInjectionTests
     public void Weave_ILWeaving_FakeLeaf_DoWork_removes_marker_and_contains_body_and_postfix()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -87,11 +84,11 @@ public class IlInjectionTests
     public void Weave_writes_reloadable_dll_and_pdb()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
-        Assert.True(File.Exists(temp.PdbPath), $"PDB 应存在：{temp.PdbPath}");
+        Assert.True(File.Exists(temp.PdbPath), $"PDB ????{temp.PdbPath}");
 
         var readerParameters = new ReaderParameters
         {
@@ -108,7 +105,7 @@ public class IlInjectionTests
     public void AssemblyWeaver_skips_methods_without_body()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         using var resolver = new ReferenceAssemblyResolver(temp.AssemblyPath, references);
         WeaveScanner.Scan(resolver.WovenAssembly, out var weaves, out _);
         var registry = WeaveRegistry.Build(weaves, resolver, resolver.WovenAssembly.MainModule);
@@ -123,7 +120,7 @@ public class IlInjectionTests
     public void Weave_ILWeaving_exception_wrap_adds_catch_handler_from_weave_source()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -146,20 +143,20 @@ public class IlInjectionTests
         Assert.True(handlerIndex >= 0);
     }
 
-    /// <summary>ILWeaving ProcessWeave catch handler should wrap the original _Process method body.</summary>
+    /// <summary>ILWeaving TickWeave catch handler should wrap the original tick method body.</summary>
     [Fact]
-    public void Weave_ILWeaving_ProcessWeave_catch_wraps_original_body()
+    public void Weave_ILWeaving_TickWeave_catch_wraps_original_body()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
 
         using var assembly = AssemblyDefinition.ReadAssembly(temp.AssemblyPath);
         var type = assembly.MainModule.EnumerateAllTypes()
-            .First(t => t.FullName == "SharpWeaver.TestFixtures.Godot.GodotProcessNode");
-        var method = type.Methods.First(m => m.Name == "_Process");
+            .First(t => t.FullName == "SharpWeaver.TestFixtures.Fake.DerivedTickNode");
+        var method = type.Methods.First(m => m.Name == "Tick");
         var handler = Assert.Single(
             method.Body.ExceptionHandlers,
             h => h.HandlerType == ExceptionHandlerType.Catch);
@@ -179,7 +176,7 @@ public class IlInjectionTests
     public void Weave_ILWeaving_composition_removes_all_markers()
     {
         using var temp = CopyDuplicatePrefixAssemblyToTemp();
-        var references = BuildReferenceList(DuplicatePrefixOutputDir, includeGodotSharp: false);
+        var references = BuildReferenceList(DuplicatePrefixOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -222,7 +219,7 @@ public class IlInjectionTests
     public void Weave_ILWeaving_splice_removes_marker_call_from_override()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -244,7 +241,7 @@ public class IlInjectionTests
     public void Weave_regex_capture_injects_method_name_ldstr()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -272,7 +269,7 @@ public class IlInjectionTests
     public void Weave_non_void_branch_to_ret_retargets_through_return_local_store()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -289,7 +286,7 @@ public class IlInjectionTests
         var loadBeforeRet = instructions[retIndex - 1];
         Assert.True(
             loadBeforeRet.OpCode == OpCodes.Ldloc || loadBeforeRet.OpCode == OpCodes.Ldloc_S,
-            $"期望 ret 前为 ldloc，实际为 {loadBeforeRet.OpCode}。");
+            $"?? ret ?? ldloc???? {loadBeforeRet.OpCode}??);
 
         var returnLocal = (VariableDefinition)loadBeforeRet.Operand!;
         Assert.Contains(
@@ -304,7 +301,7 @@ public class IlInjectionTests
     public void Weave_init_property_setter_does_not_emit_void_return_local()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -325,12 +322,39 @@ public class IlInjectionTests
         Assert.NotEqual(OpCodes.Ldloc_S, instructions[retIndex - 1].OpCode);
     }
 
+    /// <summary>Managed byref-return methods should not be sync-woven by wildcard profiling templates.</summary>
+    [Fact]
+    public void Weave_byref_return_method_is_not_woven_by_wildcard_template()
+    {
+        using var temp = CopyFixtureAssemblyToTemp();
+        var references = BuildReferenceList(FixturesOutputDir);
+        var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error);
+
+        using var assembly = AssemblyDefinition.ReadAssembly(temp.AssemblyPath);
+        var method = assembly.MainModule.EnumerateAllTypes()
+            .First(t => t.FullName == "SharpWeaver.TestFixtures.Fake.ByRefReturnTarget`1")
+            .Methods.First(m => m.Name == "GetValueRefOrNullRefReadOnly");
+
+        Assert.True(IlTypeHelper.IsByReferenceReturn(method.ReturnType));
+        Assert.DoesNotContain(method.Body.Instructions, instr =>
+            instr.OpCode == OpCodes.Call
+            && instr.Operand is MethodReference mr
+            && mr.DeclaringType.FullName == "SharpWeaver.TestFixtures.ValidPatches"
+            && mr.Name == "GenericCaptureWeave");
+        Assert.DoesNotContain(method.Body.Instructions, instr =>
+            instr.Operand is MethodReference mr
+            && mr.DeclaringType.FullName == "SharpWeaver.TestFixtures.Fake.BehavioralState"
+            && mr.Name == "set_GenericWeaveRuns");
+    }
+
     /// <summary>Call-site weaving should remove template markers and keep the original callee call only when requested.</summary>
     [Fact]
     public void Weave_call_site_rewrites_callers_without_markers()
     {
         using var temp = CopyFixtureAssemblyToTemp();
-        var references = BuildReferenceList(FixturesOutputDir, includeGodotSharp: true);
+        var references = BuildReferenceList(FixturesOutputDir);
         var exitCode = RunWeaver(temp.AssemblyPath, references, out var error);
         Assert.Equal(0, exitCode);
         Assert.Empty(error);
@@ -400,7 +424,7 @@ public class IlInjectionTests
         FixtureBuildHelper.EnsureAllFixturesBuilt();
     }
 
-    private static List<string> BuildReferenceList(string primaryOutputDir, bool includeGodotSharp)
+    private static List<string> BuildReferenceList(string primaryOutputDir)
     {
         var references = new List<string>();
         foreach (var file in Directory.GetFiles(primaryOutputDir, "*.dll"))
@@ -408,40 +432,11 @@ public class IlInjectionTests
             references.Add(file);
         }
 
-        if (includeGodotSharp && File.Exists(GodotSharpPath))
-        {
-            references.Add(GodotSharpPath);
-        }
-
         return references;
     }
 
     private static int RunWeaver(string assemblyPath, IReadOnlyList<string> references, out IReadOnlyList<string> error)
-    {
-        var toolPath = FixtureBuildHelper.WeaverToolPath;
-        var refsArg = string.Join(";", references);
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            Arguments = $"\"{toolPath}\" --assembly \"{assemblyPath}\" --references \"{refsArg}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-
-        using var process = Process.Start(psi);
-        Assert.NotNull(process);
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        _ = stdout;
-        error = stderr
-            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
-        return process.ExitCode;
-    }
+        => TestWeaverInvoker.RunWeave(assemblyPath, references, out error);
 
     private sealed class TempAssemblyCopy : IDisposable
     {

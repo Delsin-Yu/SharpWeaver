@@ -7,9 +7,4 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\..\SharpWeaver.Attributes\SharpWeaver.Attributes.csproj" />
-        <ProjectReference Include="..\ExternalBase\SharpWeaver.TestFixtures.ExternalBase.csproj" />
-    </ItemGroup>
-
 </Project>

@@ -61,11 +61,11 @@ public static class ValidAsyncPatches
     }
 
     /// <summary>
-    /// Wildcard weave <c>AsyncGdTaskTarget.*Async(**)</c>: verifies GDTask target type rewriting.
+    /// Wildcard weave <c>AsyncCustomTaskTarget.*Async(**)</c>: verifies custom async-like return type rewriting.
     /// </summary>
     /// <param name="instance">Target instance.</param>
-    [AsyncWeave("SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget.*Async(**)", priority: 5)]
-    public static async Task GdTaskWildcardWeave(object? instance)
+    [AsyncWeave("SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget.*Async(**)", priority: 5)]
+    public static async Task CustomTaskWildcardWeave(object? instance)
     {
         _ = instance;
         BehavioralState.AsyncPrefixRuns++;
@@ -75,12 +75,12 @@ public static class ValidAsyncPatches
     }
 
     /// <summary>
-    /// Generic-aware wildcard weave for <c>AsyncGdTaskTarget.GenericMethodResultAsync</c>.
+    /// Generic-aware wildcard weave for <c>AsyncCustomTaskTarget.GenericMethodResultAsync</c>.
     /// </summary>
     /// <param name="instance">Target instance.</param>
     /// <param name="genericTypeParams">Open generic parameters visible on the target method.</param>
-    [AsyncWeave("SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget.GenericMethodResultAsync(**)", priority: 5, genericWeave: true)]
-    public static async Task GdTaskGenericWildcardWeave(
+    [AsyncWeave("SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget.GenericMethodResultAsync(**)", priority: 5, genericWeave: true)]
+    public static async Task CustomTaskGenericWildcardWeave(
         object? instance,
         [WeaveTypeParams] Type[] genericTypeParams)
     {

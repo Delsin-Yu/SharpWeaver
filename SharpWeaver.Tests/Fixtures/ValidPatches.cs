@@ -1,7 +1,6 @@
 using System;
 using SharpWeaver;
 using SharpWeaver.TestFixtures.Fake;
-using SharpWeaver.TestFixtures.Godot;
 
 namespace SharpWeaver.TestFixtures;
 
@@ -22,13 +21,13 @@ public static class ValidPatches
     }
 
     /// <summary>
-    /// ILWeaving weave for <c>Godot.Node._Process(double)</c>: wraps the original method body with <c>try/catch</c>,
+    /// ILWeaving weave for <c>TickHost.Tick(double)</c>: wraps the original method body with <c>try/catch</c>,
     /// logs caught exceptions and rethrows.
     /// </summary>
     /// <param name="instance">Target instance (by value).</param>
-    /// <param name="delta">Frame delta (ref form to satisfy weave signature contract).</param>
-    [Weave("Godot.Node._Process(double)", priority: 0)]
-    public static void ProcessWeave(GodotProcessNode instance, ref double delta)
+    /// <param name="delta">Tick delta (ref form to satisfy weave signature contract).</param>
+    [Weave("SharpWeaver.TestFixtures.ExternalBase.TickHost.Tick(double)", priority: 0)]
+    public static void TickWeave(DerivedTickNode instance, ref double delta)
     {
         _ = instance;
         _ = delta;
@@ -192,6 +191,7 @@ public static class ValidPatches
     /// <param name="methodName">Injected target method name.</param>
     [Weave("SharpWeaver.TestFixtures.Fake.GenericMethodTarget.Echo(**)", priority: 5, genericWeave: true)]
     [Weave("SharpWeaver.TestFixtures.Fake.GenericContainer*.Run(**)", priority: 5, genericWeave: true)]
+    [Weave("SharpWeaver.TestFixtures.Fake.ByRefReturnTarget*.GetValueRefOrNullRefReadOnly(**)", priority: 5, genericWeave: true)]
     public static void GenericCaptureWeave(
         object? instance,
         [WeaveTypeParams] Type[] genericTypeParams,
@@ -221,4 +221,5 @@ public static class ValidPatches
         BehavioralState.GenericNonGenericWeaveRuns++;
         WeaveTemplate.OriginalBody();
     }
+
 }

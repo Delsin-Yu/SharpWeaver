@@ -8,6 +8,8 @@
 
     <Project Path="SharpWeaver.Tests/Unit/SharpWeaver.Tests.csproj"/>
 
+    <Project Path="SharpWeaver.Tests/ExternalBase/SharpWeaver.TestFixtures.ExternalBase.csproj"/>
+
     <Project Path="SharpWeaver.Tests/Fixtures/SharpWeaver.TestFixtures.csproj"/>
 
     <Project Path="SharpWeaver.Tests/BadSignature/SharpWeaver.TestFixtures.BadSignature.csproj"/>

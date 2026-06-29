@@ -20,4 +20,21 @@ public static class IlTypeHelper
 
         return type.MetadataType == MetadataType.Void;
     }
+
+    /// <summary>
+    /// Determines whether the method return type is a managed reference, including modified forms such as
+    /// <c>T&amp; modreq(InAttribute)</c> emitted for <c>ref readonly</c> returns.
+    /// </summary>
+    /// <param name="returnType">Method return type reference.</param>
+    /// <returns>Whether the return type is a managed reference after stripping return modifiers.</returns>
+    public static bool IsByReferenceReturn(TypeReference returnType)
+    {
+        var type = returnType;
+        while (type is RequiredModifierType or OptionalModifierType)
+        {
+            type = ((TypeSpecification)type).ElementType;
+        }
+
+        return type.IsByReference;
+    }
 }

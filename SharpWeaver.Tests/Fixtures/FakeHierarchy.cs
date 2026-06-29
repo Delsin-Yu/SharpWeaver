@@ -1,6 +1,6 @@
 namespace SharpWeaver.TestFixtures.Fake;
 
-/// <summary>Base class for override matching tests without Godot dependency.</summary>
+/// <summary>Base class for override matching tests without external framework dependencies.</summary>
 public class FakeBase
 {
     /// <summary>Virtual method that can be overridden by derived classes.</summary>

@@ -98,20 +98,15 @@ internal static class FixtureBuildHelper
         {
             FileName = "dotnet",
             Arguments = $"build \"{testsProjectPath}\" -c Debug",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
         };
 
-        using var process = Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to start dotnet build for test fixtures.");
-        process.WaitForExit();
-        if (process.ExitCode != 0)
+        var (exitCode, output, error) = TestProcessRunner.Run(
+            psi,
+            progressLabel: "dotnet build SharpWeaver test fixtures");
+        if (exitCode != 0)
         {
-            var output = process.StandardOutput.ReadToEnd();
-            var error = process.StandardError.ReadToEnd();
             throw new InvalidOperationException(
-                $"Fixture build failed with exit code {process.ExitCode}.{Environment.NewLine}{output}{Environment.NewLine}{error}");
+                $"Fixture build failed with exit code {exitCode}.{Environment.NewLine}{output}{Environment.NewLine}{error}");
         }
     }
 }

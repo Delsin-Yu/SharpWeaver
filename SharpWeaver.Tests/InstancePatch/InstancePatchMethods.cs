@@ -6,7 +6,7 @@ namespace SharpWeaver.TestFixtures.InstancePatch;
 public class InstancePatchMethods
 {
     /// <summary>Non-static ILWeaving weave method — should be rejected by WeaveScanner.</summary>
-    [Weave("Godot.Node._Process(double)", priority: 0)]
+    [Weave("SharpWeaver.TestFixtures.ExternalBase.TickHost.Tick(double)", priority: 0)]
     public void InstanceILWeaving()
     {
         WeaveTemplate.OriginalBody();

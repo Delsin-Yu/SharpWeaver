@@ -89,6 +89,7 @@ public static class WeaveMethodFilter
         MethodDefinition method,
         IReadOnlySet<MethodDefinition>? weaveTemplateCallees = null) =>
         IsWildcardMatchCandidateCore(method, weaveTemplateCallees)
+        && !IlTypeHelper.IsByReferenceReturn(method.ReturnType)
         && !AsyncMethodHelper.IsCompilerAsyncMethod(method);
 
     /// <summary>Whether the method is eligible as a target candidate for a specific sync weave.</summary>

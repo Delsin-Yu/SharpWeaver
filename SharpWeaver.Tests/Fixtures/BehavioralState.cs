@@ -9,6 +9,9 @@ public static class BehavioralState
     /// <summary>Prefix skip test: when non-null, the prefix returns this value early.</summary>
     public static int? IntReturnPrefixValue { get; set; }
 
+    /// <summary>Number of times an external-base tick override body executed.</summary>
+    public static int TickBodyRuns { get; set; }
+
     /// <summary>Number of times <see cref="FakeLeaf.DoWork(int)"/> method body executed.</summary>
     public static int DoWorkBodyRuns { get; set; }
 
@@ -168,6 +171,7 @@ public static class BehavioralState
     public static void Reset()
     {
         IntReturnPrefixValue = null;
+        TickBodyRuns = 0;
         DoWorkBodyRuns = 0;
         DoWorkPostfixRuns = 0;
         DoWorkTrace.Clear();

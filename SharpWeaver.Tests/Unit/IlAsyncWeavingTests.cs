@@ -8,6 +8,7 @@ using Xunit;
 namespace SharpWeaver.Tests;
 
 /// <summary>AsyncILWeaving filtering, IL injection, and runtime behavior tests.</summary>
+[TestProgress]
 public class IlAsyncWeavingTests
 {
     private static readonly string FixturesOutputDir = FixtureBuildHelper.FixturesOutputDir;
@@ -36,19 +37,19 @@ public class IlAsyncWeavingTests
         Assert.True(WeaveMethodFilter.IsSyncWeaveCandidate(syncTaskMethod));
     }
 
-    /// <summary>Compiler-generated async GDTask methods should be async weave candidates.</summary>
+    /// <summary>Compiler-generated async custom task methods should be async weave candidates.</summary>
     [Fact]
-    public void IsAsyncWeaveCandidate_includes_compiler_async_gdtask_methods()
+    public void IsAsyncWeaveCandidate_includes_compiler_async_custom_task_methods()
     {
         FixtureBuildHelper.EnsureAllFixturesBuilt();
         using var assembly = ReadFixtureAssembly();
-        var asyncMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget", "SingleAwaitAsync");
+        var asyncMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget", "SingleAwaitAsync");
         Assert.True(AsyncMethodHelper.IsAsyncLikeReturn(asyncMethod.ReturnType));
         Assert.True(WeaveMethodFilter.IsAsyncWeaveCandidate(asyncMethod));
         Assert.True(AsyncMethodHelper.TryResolveMoveNext(asyncMethod, out _, out _));
     }
 
-    /// <summary>Compiler-generated async Task&lt;T&gt; and GDTask&lt;T&gt; methods should be async weave candidates.</summary>
+    /// <summary>Compiler-generated async Task&lt;T&gt; and custom task methods should be async weave candidates.</summary>
     [Fact]
     public void IsAsyncWeaveCandidate_includes_compiler_async_generic_task_methods()
     {
@@ -56,12 +57,12 @@ public class IlAsyncWeavingTests
         using var assembly = ReadFixtureAssembly();
 
         var taskMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncTaskTarget", "GenericAwaitAsync");
-        var gdTaskMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget", "GenericAwaitAsync");
+        var customTaskMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget", "GenericAwaitAsync");
 
         Assert.True(AsyncMethodHelper.IsAsyncLikeReturn(taskMethod.ReturnType));
-        Assert.True(AsyncMethodHelper.IsAsyncLikeReturn(gdTaskMethod.ReturnType));
+        Assert.True(AsyncMethodHelper.IsAsyncLikeReturn(customTaskMethod.ReturnType));
         Assert.True(WeaveMethodFilter.IsAsyncWeaveCandidate(taskMethod));
-        Assert.True(WeaveMethodFilter.IsAsyncWeaveCandidate(gdTaskMethod));
+        Assert.True(WeaveMethodFilter.IsAsyncWeaveCandidate(customTaskMethod));
     }
 
     /// <summary>After weaving, MoveNext should no longer contain the OriginalBodyAsync marker.</summary>
@@ -84,7 +85,7 @@ public class IlAsyncWeavingTests
             && methodReference.Name == "OriginalBodyAsync");
     }
 
-    /// <summary>Async weaving should execute in prefix → original body → postfix order.</summary>
+    /// <summary>Async weaving should execute in prefix ??original body ??postfix order.</summary>
     [Fact]
     public async Task Woven_AsyncILWeaving_runs_prefix_body_and_postfix_in_order()
     {
@@ -194,9 +195,9 @@ public class IlAsyncWeavingTests
         Assert.Equal(1, behavioralState.AsyncWeavePostfixRuns);
     }
 
-    /// <summary>Async GDTask targets should be successfully woven and execute in order.</summary>
+    /// <summary>Async custom task targets should be successfully woven and execute in order.</summary>
     [Fact]
-    public async Task Woven_AsyncILWeaving_gdtask_target_runs_prefix_body_and_postfix()
+    public async Task Woven_AsyncILWeaving_custom_task_target_runs_prefix_body_and_postfix()
     {
         using var temp = CopyFixtureAssemblyToTemp();
         var references = BuildReferenceList();
@@ -208,11 +209,11 @@ public class IlAsyncWeavingTests
         var behavioralState = GetBehavioralState(assembly);
         behavioralState.Reset();
 
-        var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget", throwOnError: true)!;
+        var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget", throwOnError: true)!;
         var instance = Activator.CreateInstance(type)!;
         var singleAwait = type.GetMethod("SingleAwaitAsync", BindingFlags.Instance | BindingFlags.Public)!;
-        var gdtask = singleAwait.Invoke(instance, null)!;
-        var awaiter = gdtask.GetType().GetMethod("GetAwaiter")!.Invoke(gdtask, null)!;
+        var customTask = singleAwait.Invoke(instance, null)!;
+        var awaiter = customTask.GetType().GetMethod("GetAwaiter")!.Invoke(customTask, null)!;
         awaiter.GetType().GetMethod("GetResult")!.Invoke(awaiter, null);
 
         Assert.Equal(1, behavioralState.AsyncPrefixRuns);
@@ -222,9 +223,9 @@ public class IlAsyncWeavingTests
         Assert.Equal(1, behavioralState.AsyncDisposeRuns);
     }
 
-    /// <summary>Async GDTask multi-await targets should have no duplicate state machine fields and execute in order.</summary>
+    /// <summary>Async custom task multi-await targets should have no duplicate state machine fields and execute in order.</summary>
     [Fact]
-    public void Woven_AsyncILWeaving_gdtask_multi_await_has_unique_state_machine_fields()
+    public void Woven_AsyncILWeaving_custom_task_multi_await_has_unique_state_machine_fields()
     {
         using var temp = CopyFixtureAssemblyToTemp();
         var references = BuildReferenceList();
@@ -233,7 +234,7 @@ public class IlAsyncWeavingTests
         Assert.Empty(error);
 
         using var assembly = AssemblyDefinition.ReadAssembly(temp.AssemblyPath);
-        var outerMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget", "MultiAwaitAsync");
+        var outerMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget", "MultiAwaitAsync");
         Assert.True(AsyncMethodHelper.TryResolveMoveNext(outerMethod, out _, out var stateMachine));
 
         var duplicateFieldNames = stateMachine.Fields
@@ -251,11 +252,11 @@ public class IlAsyncWeavingTests
         var behavioralState = GetBehavioralState(wovenAssembly);
         behavioralState.Reset();
 
-        var type = wovenAssembly.GetType("SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget", throwOnError: true)!;
+        var type = wovenAssembly.GetType("SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget", throwOnError: true)!;
         var instance = Activator.CreateInstance(type)!;
         var multiAwait = type.GetMethod("MultiAwaitAsync", BindingFlags.Instance | BindingFlags.Public)!;
-        var gdtask = multiAwait.Invoke(instance, null)!;
-        var awaiter = gdtask.GetType().GetMethod("GetAwaiter")!.Invoke(gdtask, null)!;
+        var customTask = multiAwait.Invoke(instance, null)!;
+        var awaiter = customTask.GetType().GetMethod("GetAwaiter")!.Invoke(customTask, null)!;
         awaiter.GetType().GetMethod("GetResult")!.Invoke(awaiter, null);
 
         Assert.Equal(1, behavioralState.AsyncPrefixRuns);
@@ -277,7 +278,7 @@ public class IlAsyncWeavingTests
         Assert.Empty(error);
 
         using var assembly = AssemblyDefinition.ReadAssembly(temp.AssemblyPath);
-        var outerMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget", "SingleAwaitAsync");
+        var outerMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget", "SingleAwaitAsync");
         Assert.True(AsyncMethodHelper.TryResolveMoveNext(outerMethod, out var moveNext, out _));
 
         foreach (var instruction in moveNext.Body.Instructions)
@@ -302,7 +303,7 @@ public class IlAsyncWeavingTests
         Assert.Empty(error);
 
         using var assembly = AssemblyDefinition.ReadAssembly(temp.AssemblyPath);
-        var outerMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget", "MultiAwaitAsync");
+        var outerMethod = GetMethod(assembly, "SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget", "MultiAwaitAsync");
         Assert.True(AsyncMethodHelper.TryResolveMoveNext(outerMethod, out var moveNext, out _));
 
         Assert.DoesNotContain(moveNext.Body.Instructions, instruction => IsShortBranch(instruction.OpCode.Code));
@@ -337,9 +338,9 @@ public class IlAsyncWeavingTests
         Assert.Equal(["Int32"], behavioralState.AsyncGenericCapturedTypeParamNames);
     }
 
-    /// <summary>Open generic async GDTask&lt;T&gt; methods should preserve the return value and capture generic type arguments.</summary>
+    /// <summary>Open generic async custom task methods should preserve the return value and capture generic type arguments.</summary>
     [Fact]
-    public void Woven_AsyncILWeaving_generic_gdtask_result_method_captures_type_params()
+    public void Woven_AsyncILWeaving_generic_custom_task_result_method_captures_type_params()
     {
         using var temp = CopyFixtureAssemblyToTemp();
         var references = BuildReferenceList();
@@ -351,11 +352,11 @@ public class IlAsyncWeavingTests
         var behavioralState = GetBehavioralState(assembly);
         behavioralState.Reset();
 
-        var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.AsyncGdTaskTarget", throwOnError: true)!;
+        var type = assembly.GetType("SharpWeaver.TestFixtures.Fake.AsyncCustomTaskTarget", throwOnError: true)!;
         var instance = Activator.CreateInstance(type)!;
         var genericMethod = type.GetMethod("GenericMethodResultAsync")!.MakeGenericMethod(typeof(int));
-        var gdTask = genericMethod.Invoke(instance, [11])!;
-        var awaiter = gdTask.GetType().GetMethod("GetAwaiter")!.Invoke(gdTask, null)!;
+        var customTask = genericMethod.Invoke(instance, [11])!;
+        var awaiter = customTask.GetType().GetMethod("GetAwaiter")!.Invoke(customTask, null)!;
         var result = awaiter.GetType().GetMethod("GetResult")!.Invoke(awaiter, null);
 
         Assert.Equal(11, result);
@@ -427,30 +428,7 @@ public class IlAsyncWeavingTests
     }
 
     private static int RunWeaver(string assemblyPath, IReadOnlyList<string> references, out IReadOnlyList<string> error)
-    {
-        var toolPath = FixtureBuildHelper.WeaverToolPath;
-        var refsArg = string.Join(";", references);
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            Arguments = $"\"{toolPath}\" --assembly \"{assemblyPath}\" --references \"{refsArg}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-
-        using var process = Process.Start(psi);
-        Assert.NotNull(process);
-        _ = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        error = stderr
-            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
-        return process.ExitCode;
-    }
+        => TestWeaverInvoker.RunWeave(assemblyPath, references, out error);
 
     private static BehavioralStateAccessor GetBehavioralState(Assembly assembly)
     {
